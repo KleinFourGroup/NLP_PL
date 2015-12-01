@@ -22,6 +22,17 @@ def get_hnum(stat):
         pass
     return hnum + 1
 
+def getTypeName(ty):
+    if type(ty) is str:
+        type_name = ty
+    elif type(ty.name) is str:
+        type_name = ty.name
+    elif hasattr(ty.name, "value"):
+        type_name = ty.name.value
+    else:
+        type_name = ty.name.name.value
+    return type_name
+
 def parse(stat):
     seq = []
     hnum = get_hnum(stat)
@@ -44,13 +55,20 @@ def parse(stat):
         line = ["set", stat.variable.name, stat.initializer]
         seq.append(line)
     elif type(stat) == m.InstanceCreation:
+        if len(stat.body) > 0:
+            seq.append(getCU("InstanceCreation", [], "", stat.body))
         line = ["new"]
-        if hasattr(stat.type.name, 'value'):
-            line.append(stat.type.name.value)
-        else:
-            line.append(stat.type.name.name.value)
+        line.append(getTypeName(stat.type))
         line.append("@0")
         line.extend(stat.arguments)
+        seq.append(line)
+    elif type(stat) == m.Unary:
+        if stat.sign == 'x++':
+            line = ["add", stat.expression, stat.expression, '1']
+        elif stat.sign == 'x--':
+            line = ["sub", stat.expression, stat.expression, '1']
+        else:
+            line = stat
         seq.append(line)
     elif type(stat) == m.Return:
         line = ["ret"]
@@ -113,11 +131,10 @@ def parse(stat):
             line.extend(ex.arguments)
             seq.append(line)
         elif type(ex) == m.InstanceCreation:
+            if len(ex.body) > 0:
+                seq.append(getCU("InstanceCreatione", [], "", ex.body))
             line = ["new"]
-            if hasattr(ex.type.name, 'value'):
-                line.append(ex.type.name.value)
-            else:
-                line.append(ex.type.name.name.value)
+            line.append(getTypeName(ex.type))
             line.append(stat[1])
             line.extend(ex.arguments)
             seq.append(line)
@@ -126,6 +143,9 @@ def parse(stat):
                 line = ["mul", stat[1], ex.expression, '-1']
             else:
                 line = stat
+            seq.append(line)
+        elif type(ex) == m.ArrayAccess:
+            line = ["arr", stat[1], ex.target, ex.index]
             seq.append(line)
         elif type(ex) == m.Additive:
             if ex.operator == '+':
@@ -148,6 +168,12 @@ def parse(stat):
             seq.append(line)
         elif type(ex) == m.Equality:
             line = ["eq", stat[1], ex.lhs, ex.rhs]
+            seq.append(line)
+        elif type(ex) == m.Or:
+            line = ["or", stat[1], ex.lhs, ex.rhs]
+            seq.append(line)
+        elif type(ex) == m.And:
+            line = ["and", stat[1], ex.lhs, ex.rhs]
             seq.append(line)
         elif type(ex) == m.Relational:
             if ex.operator == '>':
@@ -172,7 +198,7 @@ def parse(stat):
                 line = [stat[0], stat[1], ex.target + '.' + ex.name]
             else:
                 line = [stat[0], stat[1], '@' + str(hnum) + '.' + ex.name]
-                seq.append(('alloc', '@' + str(hnum), it.target))
+                seq.append(('alloc', '@' + str(hnum), ex.target))
                 hnum += 1
             seq.append(line)
         else:
@@ -235,20 +261,12 @@ def extractDefVars(pre, stat):
     v_list = []
     if type(stat) == m.MethodDeclaration:
         for param in stat.parameters:
-            if type(param.type) is str:
-                type_name = param.type
-            else:
-                type_name = param.type.name.value
-            v_list.append(["def", type_name, param.variable.name])
+            v_list.append(["def", getTypeName(param.type), param.variable.name])
     elif type(stat) == m.Catch:
         v_list.append(["def", stat.types[0].name.value, stat.variable.name])
     elif type(stat) == m.For and type(stat.init) == m.VariableDeclaration:
         for var_decl in stat.init.variable_declarators:
-            if type(stat.init.type) is str:
-                type_name = stat.init.type
-            else:
-                type_name = stat.init.type.name.value
-            v_list.append(["def", type_name, var_decl.variable.name])
+            v_list.append(["def", getTypeName(stat.init.type), var_decl.variable.name])
     return v_list
 def getCU(name, v_list, pre, body):
     print pre + "getCU()"
@@ -259,11 +277,7 @@ def getCU(name, v_list, pre, body):
         print pre + str(stat)
         if type(stat) == m.FieldDeclaration or type(stat) == m.VariableDeclaration:
             for var_decl in stat.variable_declarators:
-                if type(stat.type) is str:
-                    type_name = stat.type
-                else:
-                    type_name = stat.type.name.value
-                cu.addVar(["def", type_name, var_decl.variable.name])
+                cu.addVar(["def", getTypeName(stat.type), var_decl.variable.name])
                 if var_decl.initializer is not None:
                     cu.addStat(var_decl)
         elif type(stat) == m.ExpressionStatement:
@@ -325,7 +339,7 @@ def ExtractCode(filename):
 
 def main():
     file_path = "../Java/ParseTests/"
-    file_name = "FloatingSearchView.java"
+    file_name = "test.java"
     ExtractCode(file_path + file_name)
 
 if __name__ == "__main__":

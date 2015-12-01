@@ -41,7 +41,7 @@ class Tester {
 			c = v[i];
 		}
 
-		if (c == 'a') t1(11, 12);
+		if (c == 'a' && c == 'b' || c != 'g') t1(11, 12);
 
 		if (c == 'a') t1(11, 12);
 		else v = t2();
