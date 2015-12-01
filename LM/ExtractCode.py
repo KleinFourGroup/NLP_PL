@@ -5,6 +5,8 @@ import plyj.parser
 import plyj.model as m
 import copy
 
+unr = []
+
 def nstr(l):
     try:
         s = ' '.join(map(str, l))
@@ -201,12 +203,19 @@ def parse(stat):
                 seq.append(('alloc', '@' + str(hnum), ex.target))
                 hnum += 1
             seq.append(line)
+        elif type(ex) == m.ArrayCreation:
+            line = ["newarr", getTypeName(ex.type), stat[1], ex.dimensions[0]]
+            seq.append(line)
         else:
             seq.append(stat)
+            if type(ex) is not str:
+                unr.append(stat)
     else:
         if type(stat) == type(CodeUnit()):
             stat.unpack()
         seq.append(stat)
+        if not type(stat) == type(CodeUnit()):
+            unr.append(stat)
     return seq
 
 class CodeUnit:
@@ -336,10 +345,12 @@ def ExtractCode(filename):
         cu.unpack()
         cu.matchPackages(imports)
         print cu.getStr()
+        for s in unr:
+            print nstr(s)
 
 def main():
     file_path = "../Java/ParseTests/"
-    file_name = "test.java"
+    file_name = "FloatingSearchView.java"
     ExtractCode(file_path + file_name)
 
 if __name__ == "__main__":
