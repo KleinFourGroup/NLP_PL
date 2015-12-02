@@ -4,8 +4,7 @@ import sys
 import plyj.parser
 import plyj.model as m
 import copy
-
-unr = []
+import os
 
 def nstr(l):
     try:
@@ -66,9 +65,9 @@ def parse(stat):
         seq.append(line)
     elif type(stat) == m.Unary:
         if stat.sign == 'x++':
-            line = ["add", stat.expression, stat.expression, '1']
+            line = ["inc", stat.expression]
         elif stat.sign == 'x--':
-            line = ["sub", stat.expression, stat.expression, '1']
+            line = ["dec", stat.expression]
         else:
             line = stat
         seq.append(line)
@@ -80,10 +79,12 @@ def parse(stat):
     elif type(stat) == list and not stat[0] == "set":
         nstat = []
         for it in stat:
-            if type(it) is str:
+            if type(it) is str or it is None:
                 nstat.append(it)
             elif type(it) == m.Name or type(it) == m.Literal:
                 nstat.append(it.value)
+            elif type(it) == m.ClassLiteral:
+                nstat.append(getTypeName(it.type))
             elif type(it) == m.Cast:
                 nstat.append(it.expression)
             elif type(it) == m.FieldAccess:
@@ -101,10 +102,12 @@ def parse(stat):
     elif type(stat) == list and stat[0] == "set" and type(stat[1]) is not str:
         nstat = ["set"]
         it = stat[1]
-        if type(it) is str:
+        if type(it) is str or it is None:
             nstat.append(it)
         elif type(it) == m.Name or type(it) == m.Literal:
             nstat.append(it.value)
+        elif type(it) == m.ClassLiteral:
+            nstat.append(getTypeName(it.type))
         elif type(it) == m.Cast:
             nstat.append(it.expression)
         elif type(it) == m.FieldAccess:
@@ -143,6 +146,14 @@ def parse(stat):
         elif type(ex) == m.Unary:
             if ex.sign == '-':
                 line = ["mul", stat[1], ex.expression, '-1']
+            elif ex.sign == '!':
+                line = ["neg", stat[1], ex.expression]
+            elif ex.sign == '~':
+                line = ["bitflip", stat[1], ex.expression]
+            elif ex.sign == 'x++':
+                line = ["inc", stat[1], ex.expression]
+            elif ex.sign == 'x--':
+                line = ["dec", stat[1], ex.expression]
             else:
                 line = stat
             seq.append(line)
@@ -162,6 +173,14 @@ def parse(stat):
                 line = ["mul", stat[1], ex.lhs, ex.rhs]
             elif ex.operator == '/':
                 line = ["div", stat[1], ex.lhs, ex.rhs]
+            elif ex.operator == '%':
+                line = ["mod", stat[1], ex.lhs, ex.rhs]
+            else:
+                line = stat
+            seq.append(line)
+        elif type(ex) == m.Assignment:
+            if ex.operator == '=':
+                line = ["rset", stat[1], ex.lhs, ex.rhs]
             else:
                 line = stat
             seq.append(line)
@@ -177,6 +196,16 @@ def parse(stat):
         elif type(ex) == m.And:
             line = ["and", stat[1], ex.lhs, ex.rhs]
             seq.append(line)
+        elif type(ex) == m.Shift:
+            if ex.operator == '>>':
+                line = ["arshr", stat[1], ex.lhs, ex.rhs]
+            elif ex.operator == '>>>':
+                line = ["logshr", stat[1], ex.lhs, ex.rhs]
+            elif ex.operator == '<<':
+                line = ["arshl", stat[1], ex.lhs, ex.rhs]
+            else:
+                line = stat
+            seq.append(line)
         elif type(ex) == m.Relational:
             if ex.operator == '>':
                 line = ["gr", stat[1], ex.lhs, ex.rhs]
@@ -189,8 +218,23 @@ def parse(stat):
             else:
                 line = stat
             seq.append(line)
+        elif type(ex) == m.ConditionalOr:
+            if ex.operator == '||':
+                line = ["cndor", stat[1], ex.lhs, ex.rhs]
+            else:
+                line = stat
+            seq.append(line)
+        elif type(ex) == m.ConditionalAnd:
+            if ex.operator == '&&':
+                line = ["cndand", stat[1], ex.lhs, ex.rhs]
+            else:
+                line = stat
+            seq.append(line)
         elif type(ex) == m.Name or type(ex) == m.Literal:
             line = [stat[0], stat[1], ex.value]
+            seq.append(line)
+        elif type(ex) == m.ClassLiteral:
+            line = [stat[0], stat[1], getTypeName(ex.type)]
             seq.append(line)
         elif type(ex) == m.Cast:
             line = [stat[0], stat[1], ex.expression]
@@ -206,16 +250,16 @@ def parse(stat):
         elif type(ex) == m.ArrayCreation:
             line = ["newarr", getTypeName(ex.type), stat[1], ex.dimensions[0]]
             seq.append(line)
+        elif type(ex) == m.ArrayInitializer:
+            line = ["newarr", stat[1]]
+            line.extend(ex.elements)
+            seq.append(line)
         else:
             seq.append(stat)
-            if type(ex) is not str:
-                unr.append(stat)
     else:
         if type(stat) == type(CodeUnit()):
             stat.unpack()
         seq.append(stat)
-        if not type(stat) == type(CodeUnit()):
-            unr.append(stat)
     return seq
 
 class CodeUnit:
@@ -253,6 +297,19 @@ class CodeUnit:
                             stat[1] = im
             except:
                 pass
+    def getUNR(self):
+        unr = []
+        for stat in self.body:
+            if type(stat) == type(self):
+                unr.extend(stat.getUNR())
+            elif type(stat) == list or type(stat) == tuple:
+                for t in stat:
+                    if type(t) is not str and t is not None:
+                        unr.append(stat)
+                        break
+            else:
+                unr.append(stat)
+        return unr
     def getStr(self, pre = ""):
         s = pre + self.name + "\n"
         for var in self.v_list:
@@ -266,7 +323,7 @@ class CodeUnit:
         return s
 
 def extractDefVars(pre, stat):
-    print pre + str(stat)
+    #print pre + str(type(stat).__class__)
     v_list = []
     if type(stat) == m.MethodDeclaration:
         for param in stat.parameters:
@@ -278,80 +335,97 @@ def extractDefVars(pre, stat):
             v_list.append(["def", getTypeName(stat.init.type), var_decl.variable.name])
     return v_list
 def getCU(name, v_list, pre, body):
-    print pre + "getCU()"
+    #print pre + "getCU()"
     cu = CodeUnit(name)
-    for var in v_list:
-        cu.addVar(var)
-    for stat in body:
-        print pre + str(stat)
-        if type(stat) == m.FieldDeclaration or type(stat) == m.VariableDeclaration:
-            for var_decl in stat.variable_declarators:
-                cu.addVar(["def", getTypeName(stat.type), var_decl.variable.name])
-                if var_decl.initializer is not None:
-                    cu.addStat(var_decl)
-        elif type(stat) == m.ExpressionStatement:
-            cu.addStat(stat)
-        elif type(stat) == m.Return:
-            cu.addStat(stat)
-        else:
-            ncu = None
-            lvars = extractDefVars(pre + "//", stat)
-            if type(stat) == m.While or type(stat) == m.DoWhile or type(stat) == m.For or type(stat) == m.MethodDeclaration or type(stat) == m.ClassDeclaration:
-                ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.body)
-            elif type(stat) == m.Block:
-                ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.statements)
-            elif type(stat) == m.ConstructorDeclaration:
-                ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.block)
+    if v_list is not None:
+        for var in v_list:
+            cu.addVar(var)
+    if body is not None:
+        for stat in body:
+            #print pre + str(stat)
+            if type(stat) == m.FieldDeclaration or type(stat) == m.VariableDeclaration:
+                for var_decl in stat.variable_declarators:
+                    cu.addVar(["def", getTypeName(stat.type), var_decl.variable.name])
+                    if var_decl.initializer is not None:
+                        cu.addStat(var_decl)
+            elif type(stat) == m.ExpressionStatement:
+                cu.addStat(stat)
+            elif type(stat) == m.Return:
+                cu.addStat(stat)
             else:
-                ncu = CodeUnit(type(stat).__name__)
-                for var in lvars:
-                    ncu.addVar(var)
-                if type(stat) == m.IfThenElse:
-                    if stat.if_true is not None:
-                        ncu.addStat(getCU("IfTrue", [], pre + '\t', [stat.if_true]))
+                ncu = None
+                lvars = extractDefVars(pre + "//", stat)
+                if type(stat) == m.While or type(stat) == m.DoWhile or type(stat) == m.For or type(stat) == m.MethodDeclaration or type(stat) == m.ClassDeclaration:
+                    if type(stat.body) == list:
+                        ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.body)
+                    elif stat.body is not None:
+                        ncu = getCU(type(stat).__name__, lvars, pre + '\t', [stat.body])
                     else:
-                        ncu.addStat(CodeUnit("IfTrue"))
-                    if stat.if_false is not None:
-                        ncu.addStat(getCU("IfFalse", [], pre + '\t', [stat.if_false]))
-                    else:
-                        ncu.addStat(CodeUnit("IfFalse"))
-                elif type(stat) == m.Switch:
-                    for c in stat.switch_cases:
-                        ncu.addStat(getCU("SwitchCase", [], pre + '\t', c.body))
-                elif type(stat) == m.Try:
-                    ncu.addStat(getCU("TryBlock", [], pre + '\t', stat.block))
-                    ncu.addStat(getCU("Catches", [], pre + '\t', stat.catches))
-                    if stat._finally is not None:
-                        ncu.addStat(getCU("Finally", [], pre + '\t', stat._finally))
+                        ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.body)
+                elif type(stat) == m.Block:
+                    ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.statements)
+                elif type(stat) == m.ConstructorDeclaration:
+                    ncu = getCU(type(stat).__name__, lvars, pre + '\t', stat.block)
                 else:
-                    pass
-            cu.addStat(ncu)
+                    ncu = CodeUnit(type(stat).__name__)
+                    for var in lvars:
+                        ncu.addVar(var)
+                    if type(stat) == m.IfThenElse:
+                        if stat.if_true is not None:
+                            ncu.addStat(getCU("IfTrue", [], pre + '\t', [stat.if_true]))
+                        else:
+                            ncu.addStat(CodeUnit("IfTrue"))
+                        if stat.if_false is not None:
+                            ncu.addStat(getCU("IfFalse", [], pre + '\t', [stat.if_false]))
+                        else:
+                            ncu.addStat(CodeUnit("IfFalse"))
+                    elif type(stat) == m.Switch:
+                        for c in stat.switch_cases:
+                            ncu.addStat(getCU("SwitchCase", [], pre + '\t', c.body))
+                    elif type(stat) == m.Try:
+                        ncu.addStat(getCU("TryBlock", [], pre + '\t', stat.block))
+                        ncu.addStat(getCU("Catches", [], pre + '\t', stat.catches))
+                        if stat._finally is not None:
+                            ncu.addStat(getCU("Finally", [], pre + '\t', stat._finally))
+                    else:
+                        pass
+                cu.addStat(ncu)
     return cu
 
-def ExtractCode(filename):
-    p = plyj.parser.Parser()
+def ExtractCode(p, filename):
     tree = p.parse_file(filename)
     imports = []
+    cus = []
+    unr = []
     for im in tree.import_declarations:
         imports.append(im.name.value)
-    print('declared types:')
+    print(filename)
     for type_decl in tree.type_declarations:
-        print(type_decl.name)
-        if type_decl.extends is not None:
-            print(' -> extending ' + type_decl.extends.name.value)
-        if len(type_decl.implements) is not 0:
-            print(' -> implementing ' + ', '.join([t.name.value for t in type_decl.implements]))
-        cu = getCU(type(type_decl).__name__, [], "", type_decl.body)
-        cu.unpack()
-        cu.matchPackages(imports)
-        print cu.getStr()
-        for s in unr:
-            print nstr(s)
+        if not type(type_decl) == m.EmptyDeclaration:
+            print '\t' + str(type_decl.name)
+            cu = getCU(type(type_decl).__name__, [], "", type_decl.body)
+            cu.unpack()
+            cu.matchPackages(imports)
+            cus.append(cu)
+            #print cu.getStr()
+            unr.extend(cu.getUNR())
+    return imports, cus, unr
+            
+
 
 def main():
-    file_path = "../Java/ParseTests/"
+    par = plyj.parser.Parser()
+    file_path = "../Java/Corpus/"
     file_name = "FloatingSearchView.java"
-    ExtractCode(file_path + file_name)
-
+    unr = []
+    for subdir, dirs, files in os.walk(file_path):
+        for f in files:
+            if f.endswith(".java"):
+                p = os.path.join(subdir, f)
+                i, c, u = ExtractCode(par, p)
+                unr.extend(u)
+    for s in unr:
+        print nstr(s)
+        
 if __name__ == "__main__":
     main()
