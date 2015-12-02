@@ -68,6 +68,10 @@ def parse(stat):
             line = ["inc", stat.expression]
         elif stat.sign == 'x--':
             line = ["dec", stat.expression]
+        elif stat.sign == '++x':
+            line = ["add", stat.expression, stat.expression, 1]
+        elif stat.sign == '--x':
+            line = ["sub", stat.expression, stat.expression, 1]
         else:
             line = stat
         seq.append(line)
@@ -81,11 +85,17 @@ def parse(stat):
         for it in stat:
             if type(it) is str or it is None:
                 nstat.append(it)
+            elif type(it) == int:
+                nstat.append(str(int))
             elif type(it) == m.Name or type(it) == m.Literal:
                 nstat.append(it.value)
             elif type(it) == m.ClassLiteral:
                 nstat.append(getTypeName(it.type))
+            elif type(it) == m.Type:
+                nstat.append(getTypeName(it))
             elif type(it) == m.Cast:
+                nstat.append(it.expression)
+            elif type(it) == m.Unary and it.sign == '+':
                 nstat.append(it.expression)
             elif type(it) == m.FieldAccess:
                 if type(it.target) is str:
@@ -104,11 +114,17 @@ def parse(stat):
         it = stat[1]
         if type(it) is str or it is None:
             nstat.append(it)
+        elif type(it) == int:
+            nstat.append(str(int))
         elif type(it) == m.Name or type(it) == m.Literal:
             nstat.append(it.value)
         elif type(it) == m.ClassLiteral:
             nstat.append(getTypeName(it.type))
+        elif type(it) == m.Type:
+            nstat.append(getTypeName(it))
         elif type(it) == m.Cast:
+            nstat.append(it.expression)
+        elif type(it) == m.Unary and it.sign == '+':
             nstat.append(it.expression)
         elif type(it) == m.FieldAccess:
             if type(it.target) is str:
@@ -137,7 +153,7 @@ def parse(stat):
             seq.append(line)
         elif type(ex) == m.InstanceCreation:
             if len(ex.body) > 0:
-                seq.append(getCU("InstanceCreatione", [], "", ex.body))
+                seq.append(getCU("InstanceCreation", [], "", ex.body))
             line = ["new"]
             line.append(getTypeName(ex.type))
             line.append(stat[1])
@@ -154,8 +170,15 @@ def parse(stat):
                 line = ["inc", stat[1], ex.expression]
             elif ex.sign == 'x--':
                 line = ["dec", stat[1], ex.expression]
+            elif ex.sign == '++x':
+                line = ["pinc", stat[1], ex.expression]
+            elif ex.sign == '--x':
+                line = ["pdec", stat[1], ex.expression]
             else:
                 line = stat
+            seq.append(line)
+        elif type(ex) == m.Xor:
+            line = ["xor", stat[1], ex.lhs, ex.rhs]
             seq.append(line)
         elif type(ex) == m.ArrayAccess:
             line = ["arr", stat[1], ex.target, ex.index]
@@ -236,8 +259,14 @@ def parse(stat):
         elif type(ex) == m.ClassLiteral:
             line = [stat[0], stat[1], getTypeName(ex.type)]
             seq.append(line)
+        elif type(ex) == m.Type:
+            line = [stat[0], stat[1], getTypeName(ex)]
+            seq.append(line)
         elif type(ex) == m.Cast:
             line = [stat[0], stat[1], ex.expression]
+            seq.append(line)
+        elif type(ex) == m.InstanceOf:
+            line = ["instanceof", stat[1], ex.lhs, ex.rhs]
             seq.append(line)
         elif type(ex) == m.FieldAccess:
             if type(ex.target) is str:
@@ -248,7 +277,10 @@ def parse(stat):
                 hnum += 1
             seq.append(line)
         elif type(ex) == m.ArrayCreation:
-            line = ["newarr", getTypeName(ex.type), stat[1], ex.dimensions[0]]
+            line = ["newarr", getTypeName(ex.type), stat[1]]
+            for dim in ex.dimensions:
+                if dim is not None:
+                    line.append(dim)
             seq.append(line)
         elif type(ex) == m.ArrayInitializer:
             line = ["newarr", stat[1]]
@@ -304,7 +336,7 @@ class CodeUnit:
                 unr.extend(stat.getUNR())
             elif type(stat) == list or type(stat) == tuple:
                 for t in stat:
-                    if type(t) is not str and t is not None:
+                    if type(t) is not str:# and t is not None:
                         unr.append(stat)
                         break
             else:
@@ -416,7 +448,6 @@ def ExtractCode(p, filename):
 def main():
     par = plyj.parser.Parser()
     file_path = "../Java/Corpus/"
-    file_name = "FloatingSearchView.java"
     unr = []
     for subdir, dirs, files in os.walk(file_path):
         for f in files:
