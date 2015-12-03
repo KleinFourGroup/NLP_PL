@@ -4,7 +4,6 @@ import sys
 import plyj.parser
 import plyj.model as m
 import copy
-import os
 
 def nstr(l):
     try:
@@ -314,21 +313,6 @@ class CodeUnit:
                     exp = parse(stat)
                     self.body.extend(exp)
             self.unpacked = True
-    def matchPackages(self, imports):
-        for v_dec in self.v_list:
-            for im in imports:
-                end = im.split('.')[-1]
-                if v_dec[1] == end:
-                    v_dec[1] = im
-        for stat in self.body:
-            try:
-                if stat[0] == "new":
-                    for im in imports:
-                        end = im.split('.')[-1]
-                        if stat[1] == end:
-                            stat[1] = im
-            except:
-                pass
     def getUNR(self):
         unr = []
         for stat in self.body:
@@ -417,8 +401,7 @@ def getCU(name, v_list, pre, body):
                     elif type(stat) == m.Try:
                         ncu.addStat(getCU("TryBlock", [], pre + '\t', stat.block))
                         ncu.addStat(getCU("Catches", [], pre + '\t', stat.catches))
-                        if stat._finally is not None:
-                            ncu.addStat(getCU("Finally", [], pre + '\t', stat._finally))
+                        ncu.addStat(getCU("Finally", [], pre + '\t', stat._finally))
                     else:
                         pass
                 cu.addStat(ncu)
@@ -428,7 +411,6 @@ def ExtractCode(p, filename):
     tree = p.parse_file(filename)
     imports = []
     cus = []
-    unr = []
     for im in tree.import_declarations:
         imports.append(im.name.value)
     print(filename)
@@ -437,26 +419,7 @@ def ExtractCode(p, filename):
             print '\t' + str(type_decl.name)
             cu = getCU(type(type_decl).__name__, [], "", type_decl.body)
             cu.unpack()
-            cu.matchPackages(imports)
-            cus.append(cu)
+            cus.append((imports, cu))
             #print cu.getStr()
-            unr.extend(cu.getUNR())
-    return imports, cus, unr
+    return cus
             
-
-
-def main():
-    par = plyj.parser.Parser()
-    file_path = "../Java/Corpus/"
-    unr = []
-    for subdir, dirs, files in os.walk(file_path):
-        for f in files:
-            if f.endswith(".java"):
-                p = os.path.join(subdir, f)
-                i, c, u = ExtractCode(par, p)
-                unr.extend(u)
-    for s in unr:
-        print nstr(s)
-        
-if __name__ == "__main__":
-    main()
