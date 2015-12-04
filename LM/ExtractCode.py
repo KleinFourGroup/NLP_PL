@@ -56,7 +56,7 @@ def parse(stat):
         seq.append(line)
     elif type(stat) == m.InstanceCreation:
         if len(stat.body) > 0:
-            seq.append(getCU("InstanceCreation", [], "", stat.body))
+            seq.append(getCU("InstanceDeclaration", [], "", stat.body))
         line = ["new"]
         line.append(getTypeName(stat.type))
         line.append("@0")
@@ -152,7 +152,7 @@ def parse(stat):
             seq.append(line)
         elif type(ex) == m.InstanceCreation:
             if len(ex.body) > 0:
-                seq.append(getCU("InstanceCreation", [], "", ex.body))
+                seq.append(getCU("InstanceDeclaration", [], "", ex.body))
             line = ["new"]
             line.append(getTypeName(ex.type))
             line.append(stat[1])
@@ -313,6 +313,19 @@ class CodeUnit:
                     exp = parse(stat)
                     self.body.extend(exp)
             self.unpacked = True
+    def stripToFunctions(self):
+        bod = []
+        for stat in self.body:
+            if type(stat) == type(self):
+                stat.stripToFunctions()
+                bod.append(stat)
+            else:
+                try:
+                    if stat[0] == "call":
+                        bod.append(stat)
+                except:
+                    pass
+        self.body = bod
     def getUNR(self):
         unr = []
         for stat in self.body:
@@ -326,6 +339,33 @@ class CodeUnit:
             else:
                 unr.append(stat)
         return unr
+    def renameVars(self, pre = "", lvars = []):
+        v_list = copy.deepcopy(lvars)
+        for v in self.v_list:
+            v[2] = v[2] + pre
+        v_list.extend(copy.deepcopy(self.v_list))
+        branch = 1
+        for stat in self.body:
+            if type(stat) == type(self):
+                stat.renameVars(pre + '-' + str(branch), v_list)
+                branch += 1
+            elif type(stat) == list or type(stat) == tuple:
+                for i in range(len(stat)):
+                    if not (i == 1 and (stat[0] == "call" or stat[0] == "new")):
+                        for v in v_list:
+                            vl = v[2].split('-')[0]
+                            sl = stat[i].split('.')
+                            if vl == sl[0]:
+                                if len(sl) > 1:
+                                    stat[i] = v[2] + '.' + '.'.join(sl[1:])
+                                else:
+                                    stat[i] = v[2]
+    def dumpVars(self):
+        vl = copy.deepcopy(self.v_list)
+        for stat in self.body:
+            if type(stat) == type(self):
+                vl.extend(stat.dumpVars())
+        return vl
     def getStr(self, pre = ""):
         s = pre + self.name + "\n"
         for var in self.v_list:

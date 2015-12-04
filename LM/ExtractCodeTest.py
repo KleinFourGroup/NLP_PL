@@ -15,6 +15,12 @@ def main():
                 cus = e.ExtractCode(par, p)
                 for i, cu in cus:
                     unr.extend(cu.getUNR())
+                    cu.renameVars()
+                    print cu.getStr()
+                    for v in cu.dumpVars():
+                        print e.nstr(v)
+                    break
+            break
     for s in unr:
         print e.nstr(s)
         
