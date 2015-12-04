@@ -54,7 +54,7 @@ def main():
                 p = os.path.join(subdir, f)
                 cus = e.ExtractCode(par, p)
                 for i, cu in cus:
-                    sf2, fi, sents = seq.getSents(cu, i, "levels")
+                    sf2, fi, sents = seq.getSents(cu, i, mode)
                     sf.extend(sf2)
                     fields.extend(fi)
                     print str(ctr) + ": " + str(len(sents))
