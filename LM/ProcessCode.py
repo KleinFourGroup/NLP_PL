@@ -6,25 +6,6 @@ import copy
 import random
 
 
-
-def resolveSigs(siglist):
-    sigs = {}
-    for sig in siglist:
-        l = len(sig)
-        if not l in sigs:
-            sigs[l] = [set(["UNK"]) for i in range(l)]
-        for i in range(l):
-            if not (sig[i] == "EXP" or sig[i] == "FIELD"):
-                sigs[l][i].add(sig[i])
-    strsigs = []
-    for l in sigs:
-        line = []
-        for i in range(l):
-            if len(sigs[l][i]) > 1:
-                sigs[l][i].remove("UNK")
-            line.append('/'.join(sigs[l][i]))
-        strsigs.append(line)
-    return strsigs
     
 import ExtractSequences as seq
     

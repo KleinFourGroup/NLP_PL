@@ -5,49 +5,6 @@ import ExtractSequences as seq
 import TypeUtils as t
 import sys
 
-
-def getSig(stat, v_list, no_const = True):
-    sig = []
-    try:
-        if stat[0] == "call":
-            sig.append(stat[1])
-            for i in range(2, len(stat)):
-                if stat[i] == "@0" or stat[i] == "this":
-                    sig.append(stat[i])
-                elif stat[i][0] == '@':
-                    sig.append("EXP")
-                else:
-                    b = True
-                    for var in v_list:
-                        if stat[i] == var[2]:
-                            if no_const:
-                                sig.append(var[1])
-                            else:
-                                sig.append("<type>" + var[1])
-                            b = False
-                    if b:
-                        if ':' in stat[i]:
-                            sig.append("FIELD")
-                        else:
-                            if no_const:
-                                if t.isInt(stat[i]):
-                                    sig.append("int")
-                                elif t.isFloat(stat[i]):
-                                    sig.append("float")
-                                elif t.isString(stat[i]):
-                                    sig.append("String")
-                                elif t.isChar(stat[i]):
-                                    sig.append("char")
-                                elif t.isBool(stat[i]):
-                                    sig.append("boolean")
-                                else:
-                                    sig.append("UNK")
-                            else:
-                                sig.append(stat[i])
-    except:
-        pass
-    return sig
-
 def getVarSents(sent, v_list):
     sents = []
     for var in v_list:
@@ -58,7 +15,7 @@ def getVarSents(sent, v_list):
                 if stat[i] == var[2]:
                     app.append(i - 3)
             if len(app) > 0:
-                s = getSig(stat, v_list)
+                s = t.getSig(stat, v_list)
                 s.append('|')
                 s.extend(app)
                 sen.append(s)
@@ -81,6 +38,7 @@ def main():
     ####
     meth_file = open(os.path.join(data_path, meth_name), 'w')
     var_file = open(os.path.join(data_path, var_name), 'w')
+    vocab_file = open(os.path.join(data_path, vocab_name), 'w')
     ####
     vocab = {}
     sf = []
@@ -104,7 +62,11 @@ def main():
                     for sent, vl in sents:
                         if len(sent) > 0:
                             for stat in sent:
-                                meth_file.write(e.nstr(getSig(stat, vl, False)) + '\n')
+                                meth_file.write(e.nstr(t.getSig(stat, vl, False)) + '\n')
+                                s = t.getSig(stat, vl)
+                                if not s[0] in vocab:
+                                    vocab[s[0]] = []
+                                vocab[s[0]].append(s[1:])
                             meth_file.write('\n')
                             vsents = getVarSents(sent, vl)
                             for vsent in vsents:
@@ -112,17 +74,14 @@ def main():
                                     for stat in vsent:
                                         var_file.write(e.nstr(stat) + '\n')
                                     var_file.write('\n')
-                            #    s = getSig(stat, vl)
-                            #    if not s[0] in vocab:
-                            #        vocab[s[0]] = []
-                            #    vocab[s[0]].append(s[1:])
             #break
+        for s in vocab:
+            vocab_file.write(s + '\n')
+            for sig in t.resolveSigs(vocab[s]):
+                vocab_file.write('\t' + e.nstr(sig) + '\n')
     meth_file.close()
     var_file.close()
-#    for s in vocab:
-#        print s
-#        for sig in resolveSigs(vocab[s]):
-#            print '\t' + e.nstr(sig)
+    vocab_file.close()
 #    print len(vocab)
 #    print len(set(sf))
 #    print len(set(fields))
