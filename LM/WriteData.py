@@ -48,6 +48,24 @@ def getSig(stat, v_list, no_const = True):
         pass
     return sig
 
+def getVarSents(sent, v_list):
+    sents = []
+    for var in v_list:
+        sen = []
+        for stat in sent:
+            app = []
+            for i in range(len(stat)):
+                if stat[i] == var[2]:
+                    app.append(i - 3)
+            if len(app) > 0:
+                s = getSig(stat, v_list)
+                s.append('|')
+                s.extend(app)
+                sen.append(s)
+        if len(sen) > 0:
+            sents.append(sen)
+    return sents
+
 def main():
     par = plyj.parser.Parser()
     modes = ["cfs", "levels"]
@@ -62,6 +80,7 @@ def main():
     vocab_name = "vocab_" + mode + ".txt"
     ####
     meth_file = open(os.path.join(data_path, meth_name), 'w')
+    var_file = open(os.path.join(data_path, var_name), 'w')
     ####
     vocab = {}
     sf = []
@@ -87,12 +106,19 @@ def main():
                             for stat in sent:
                                 meth_file.write(e.nstr(getSig(stat, vl, False)) + '\n')
                             meth_file.write('\n')
+                            vsents = getVarSents(sent, vl)
+                            for vsent in vsents:
+                                if len(vsent) > 0:
+                                    for stat in vsent:
+                                        var_file.write(e.nstr(stat) + '\n')
+                                    var_file.write('\n')
                             #    s = getSig(stat, vl)
                             #    if not s[0] in vocab:
                             #        vocab[s[0]] = []
                             #    vocab[s[0]].append(s[1:])
             #break
     meth_file.close()
+    var_file.close()
 #    for s in vocab:
 #        print s
 #        for sig in resolveSigs(vocab[s]):
