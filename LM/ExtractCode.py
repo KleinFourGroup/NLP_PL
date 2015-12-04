@@ -313,6 +313,75 @@ class CodeUnit:
                     exp = parse(stat)
                     self.body.extend(exp)
             self.unpacked = True
+    def matchPackages(self, imports):
+        staticFields = []
+        for v_dec in self.v_list:
+            for im in imports:
+                end = im.split('.')[-1]
+                sl = v_dec[1].split('.')
+                if sl[0] == end:
+                    if len(sl) > 1:
+                        v_dec[1] = im + '.' + '.'.join(sl[1:])
+                    else:
+                        v_dec[1] = im
+        for stat in self.body:
+            if type(stat) == type(self):
+                imps = stat.matchPackages(imports)
+                staticFields.extend(imps)
+            else:
+                for im in imports:
+                    end = im.split('.')[-1]
+                    try:
+                        for i in range(len(stat)):
+                            sl = stat[i].split('.')
+                            if sl[0] == end:
+                                if len(sl) > 1:
+                                    stat[i] = im + '.' + '.'.join(sl[1:])
+                                    staticFields.append(stat[i])
+                                else:
+                                    stat[i] = im
+                    except:
+                        pass
+        return staticFields
+    def resolveFunctions(self, imports, v_list = []):
+        lvars = copy.deepcopy(v_list)
+        lvars.extend(self.v_list)
+        for stat in self.body:
+            if type(stat) == type(self):
+                stat.resolveFunctions(imports, lvars)
+            else:
+                try:
+                    if stat[0] == "call":
+                        for v_dec in lvars:
+                            if v_dec[2] == stat[3]:
+                                stat[1] = v_dec[1] + '$' + stat[1]
+                        for im in imports:
+                            if im == stat[3]:
+                                stat[1] = im + '$' + stat[1]
+                                stat[3] = "this"
+                except:
+                    pass
+    def resolveFields(self, imports, v_list = []):
+        lvars = copy.deepcopy(v_list)
+        lvars.extend(self.v_list)
+        fields = []
+        for stat in self.body:
+            if type(stat) == type(self):
+                fi = stat.resolveFields(imports, lvars)
+                fields.extend(fi)
+            else:
+                for i in range(len(stat)):
+                    sl = stat[i].split('.')
+                    if len(sl) > 1:
+                        for v_dec in lvars:
+                            if v_dec[2] == sl[0]:
+                                stat[i] = v_dec[1] + ':' + '.'.join(sl[1:])
+                                fields.append(v_dec[1] + ':' + '.'.join(sl[1:]))
+                        for im in imports: #This shouldn't happen
+                            end = im.split('.')[-1]
+                            if sl[0] == end:
+                                stat[i] = im + '.' + '.'.join(sl[1:])
+        return fields
     def stripToFunctions(self):
         bod = []
         for stat in self.body:
@@ -323,6 +392,20 @@ class CodeUnit:
                 try:
                     if stat[0] == "call":
                         bod.append(stat)
+                except:
+                    pass
+        self.body = bod
+    def stripToAPI(self):
+        bod = []
+        for stat in self.body:
+            if type(stat) == type(self):
+                stat.stripToAPI()
+                bod.append(stat)
+            else:
+                try:
+                    if stat[0] == "call":
+                        if stat[1].split('.')[0] == "android":
+                            bod.append(stat)
                 except:
                     pass
         self.body = bod
