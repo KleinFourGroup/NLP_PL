@@ -6,42 +6,6 @@ import copy
 import random
 
 
-import TypeUtils as t
-
-def getSig(stat, v_list):
-    sig = []
-    try:
-        if stat[0] == "call":
-            sig.append(stat[1])
-            for i in range(2, len(stat)):
-                if stat[i] == "@0" or stat[i] == "this":
-                    sig.append(stat[i])
-                elif stat[i][0] == '@':
-                    sig.append("EXP")
-                else:
-                    b = True
-                    for var in v_list:
-                        if stat[i] == var[2]:
-                            sig.append(var[1])
-                            b = False
-                    if b:
-                        if t.isInt(stat[i]):
-                            sig.append("int")
-                        elif t.isFloat(stat[i]):
-                            sig.append("float")
-                        elif t.isString(stat[i]):
-                            sig.append("String")
-                        elif t.isChar(stat[i]):
-                            sig.append("char")
-                        elif t.isBool(stat[i]):
-                            sig.append("boolean")
-                        elif ':' in stat[i]:
-                            sig.append("FIELD")
-                        else:
-                            sig.append("UNK")
-    except:
-        pass
-    return sig
 
 def resolveSigs(siglist):
     sigs = {}
@@ -73,9 +37,13 @@ def main():
     sf = []
     fields = []
     ctr = 1
+    blacklist = ["5a8beeae20366b5094d0db8148e0563", "3cd87ee90872cfcb72b3cb3b773d8efa"]
     for subdir, dirs, files in os.walk(file_path):
         for f in files:
-            if f.endswith(".java") and "5a8beeae20366b5094d0db8148e0563" not in f and "3cd87ee90872cfcb72b3cb3b773d8efa" not in f:
+            clear = True
+            for h in blacklist:
+                if h in f: clear = False
+            if f.endswith(".java") and clear:
                 p = os.path.join(subdir, f)
                 cus = e.ExtractCode(par, p)
                 #cul.extend(cus)

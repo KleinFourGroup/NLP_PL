@@ -422,7 +422,7 @@ class CodeUnit:
             else:
                 unr.append(stat)
         return unr
-    def renameVars(self, pre = "", lvars = []):
+    def renameVars(self, pre = "-var", lvars = []):
         v_list = copy.deepcopy(lvars)
         for v in self.v_list:
             v[2] = v[2] + pre
