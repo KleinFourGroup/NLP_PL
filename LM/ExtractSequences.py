@@ -1,14 +1,25 @@
 import copy
+import TypeUtils as t
 
-def getSeqs(cu, mode = "levels", lvars = []):
+def getSeqs(cu, mode = "levels", lvars = [], inf = []):
     v_list = copy.deepcopy(lvars)
     v_list.extend(copy.deepcopy(cu.v_list))
+    inf = copy.deepcopy(inf)
+    inf.append(cu.name)
     sent = []
     sents = []
     if mode == "levels":
-        for stat in cu.body:
+        l = len(cu.body)
+        for i in range(l):
+            stat = cu.body[i]
+            ctx = []
+            if i == 0 or (type(cu.body[i-1]) == type(cu)):
+                ctx.append("begin")
+            if i == l-1 or (type(cu.body[i+1]) == type(cu)):
+                ctx.append("end")
+            ctx.extend(inf)
             if not type(stat) == type(cu):
-                sent.append(stat)
+                sent.append((stat, ctx))
             else:
                 sents.extend(getSeqs(stat, mode, v_list))
         if len(sent) > 0:
@@ -40,25 +51,34 @@ def purge(l):
         p.append([])
     return p
 
-def getCFS(cu, pre = ""):
-    #print pre + cu.name
+def getCFS(cu, inf = []):
+    inf = copy.deepcopy(inf)
+    inf.append(cu.name)
     sents = [[]]
     dsents = []
     if cu.name == "IfThenElse" or cu.name == "Switch" or cu.name == "Catches":
         sents = []
         for c in cu.body:
-            s, sd = getCFS(c, pre + '  ')
+            s, sd = getCFS(c, inf)
             sents.extend(s)
             dsents.extend(sd)
             #print pre + str(len(sents))# + ": " + '-'.join(map(str, map(len, sents)))
         if len(sents) == 0:
             sents = [[]]
     else:
-        for stat in cu.body:
+        l = len(cu.body)
+        for i in range(l):
+            stat = cu.body[i]
+            ctx = []
+            if i == 0 or (type(cu.body[i-1]) == type(cu)):
+                ctx.append("begin")
+            if i == l-1 or (type(cu.body[i+1]) == type(cu)):
+                ctx.append("end")
+            ctx.extend(inf)
             if not type(stat) == type(cu):
-                sents = prod(sents, [[stat]])
+                sents = prod(sents, [[(stat, ctx)]])
             else:
-                s, sd = getCFS(stat, pre + '  ')
+                s, sd = getCFS(stat, inf)
                 if len(s) > 0:
                     sents = prod(sents, s)
                 dsents.extend(sd)
@@ -91,3 +111,22 @@ def getSents(cu, i, mode):
         fields = cu.resolveFields(i)
         sents = getSentences(cu, mode)
         return importables, fields, sents
+
+def getVarSents(sents):
+    vsents = []
+    for sent, v_list in sents:
+        for var in v_list:
+            sen = []
+            for stat, ctx in sent:
+                app = []
+                for i in range(len(stat)):
+                    if stat[i] == var[2]:
+                        app.append(i - 3)
+                if len(app) > 0:
+                    s = t.getSig(stat, v_list)
+                    s.append('|')
+                    s.extend(app)
+                    sen.append((s, ctx))
+            if len(sen) > 0:
+                vsents.append(sen)
+    return vsents
