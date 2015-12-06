@@ -9,7 +9,10 @@ import sys
 def main():
     par = plyj.parser.Parser()
     modes = ["cfs", "levels"]
-    mode = sys.argv[1]
+    if len(sys.argv) > 1:
+        mode = sys.argv[1]
+    else:
+        mode = "levels"
     if mode not in modes:
         mode = "levels"
     corpus_path = "../Java/Corpus/"
@@ -43,20 +46,22 @@ def main():
                     print str(ctr) + ": " + str(len(sents))
                     ctr += 1
                     for sent, vl in sents:
-                        if len(sent) > 0:
-                            for stat, ctx in sent:
-                                meth_file.write(e.nstr(t.getSig(stat, vl, False)) + ' # ' + e.nstr(ctx) + '\n')
-                                s = t.getSig(stat, vl)
-                                if not s[0] in vocab:
-                                    vocab[s[0]] = []
-                                vocab[s[0]].append(s[1:])
-                            meth_file.write('\n')
+                        meth_file.write("<S2>\n")
+                        meth_file.write("<S1>\n")
+                        for stat, ctx in sent:
+                            meth_file.write(e.nstr(t.getSig(stat, vl, False)) + ' # ' + e.nstr(ctx) + '\n')
+                            s = t.getSig(stat, vl)
+                            if not s[0] in vocab:
+                                vocab[s[0]] = []
+                            vocab[s[0]].append(s[1:])
+                        meth_file.write('<END>\n')
                     vsents = seq.getVarSents(sents)
                     for vsent in vsents:
-                        if len(vsent) > 0:
-                            for stat, ctx in vsent:
-                                var_file.write(e.nstr(stat) + '\n')
-                            var_file.write('\n')
+                        var_file.write("<S2>\n")
+                        var_file.write("<S1>\n")
+                        for stat, ctx in vsent:
+                            var_file.write(e.nstr(stat) + '\n')
+                        var_file.write('<END>\n')
             #break
         for s in vocab:
             vocab_file.write(s + '\n')
