@@ -5,6 +5,8 @@ import ExtractSequences as seq
 import TypeUtils as t
 import sys
 import pickle
+import numpy as np
+from sklearn import linear_model
 
 def build_meth_vocab(vocab_file, meth_file):
     vocab_file.seek(0)
@@ -74,27 +76,7 @@ def getVarLines(var_file):
             sent = []
     return sents
             
-def getFeatures(meth_sents):
-    sents = []
-    for s in meth_sents:
-        sent = []
-        for i in range(len(s)):
-            stat, inf = s[i]
-            if type(stat) is str:
-                sent.append((stat, [0 for i in range(2)]))
-            else:
-                feat = []
-                if "begin" in inf:
-                    feat.append(1)
-                else:
-                    feat.append(0)
-                if "end" in inf:
-                    feat.append(1)
-                else:
-                    feat.append(0)
-                sent.append((stat, feat))
-        sents.append(sent)
-    return sents
+
 
 def getNTuples(sents, words2index, mode):
     ngrams = {}
@@ -111,14 +93,26 @@ def getNTuples(sents, words2index, mode):
                 stat1 = s[i-1]
                 stat2 = s[i-2]
             tri = (words2index[stat2], words2index[stat1], words2index[stat])
-            bi  = (words2index[stat1], words2index[stat])
-            uni = tuple([words2index[stat]])
             if not tri in ngrams:
                 ngrams[tri] = 0
             ngrams[tri] += 1
+        for i in range(1, len(s)):
+            if mode == "meth":
+                stat = s[i][0]
+                stat1 = s[i-1][0]
+            elif mode == "var":
+                stat = s[i]
+                stat1 = s[i-1]
+            bi  = (words2index[stat1], words2index[stat])
             if not bi in ngrams:
                 ngrams[bi] = 0
             ngrams[bi] += 1
+        for i in range(0, len(s)):
+            if mode == "meth":
+                stat = s[i][0]
+            elif mode == "var":
+                stat = s[i]
+            uni = tuple([words2index[stat]])
             if not uni in ngrams:
                 ngrams[uni] = 0
             ngrams[uni] += 1
@@ -149,12 +143,14 @@ def main():
     var_name = "variable_sentences_" + mode + ".txt"
     vocab_name = "vocab_" + mode + ".txt"
     counts_name = "counts_" + mode + ".txt"
+    memm_name = "memm_" + mode + ".txt"
     ####
     meth_file = open(os.path.join(data_path, meth_name), 'r')
     var_file = open(os.path.join(data_path, var_name), 'r')
     vocab_file = open(os.path.join(data_path, vocab_name), 'r')
     nvocab_file = open(os.path.join(new_path, vocab_name), 'wb')
     count_file = open(os.path.join(new_path, counts_name), 'wb')
+    memm_file = open(os.path.join(new_path, memm_name), 'wb')
     ####
     meth_sigs = build_meth_vocab(vocab_file, meth_file)
     meth_vocab_list = {}
@@ -195,19 +191,30 @@ def main():
                 act_var_vocab_list[stat] = ctr
                 ctr += 1
     pickle.dump((meth_sigs, meth_vocab_list, pot_var_vocab_list, act_var_vocab_list), nvocab_file)
+    nvocab_file.close()
     print len(meth_vocab_list)
     print len(pot_var_vocab_list)
     print len(act_var_vocab_list)
     meth_sents = getReducedLines(meth_file)
-    meth_sents = getFeatures(meth_sents)
+    meth_sents = seq.getFeatures(meth_sents)
+    X = [meth_sents[i][j][1] for i in range(len(meth_sents)) for j in range(len(meth_sents[i]))]
+    print len(X)
+    y = [meth_vocab_list[meth_sents[i][j][0]] for i in range(len(meth_sents)) for j in range(len(meth_sents[i]))]
     meth_ngram, meth_N1p, meth_ch = getNTuples(meth_sents, meth_vocab_list, "meth")
+    print "N-GRAMS"
     pot_var_ngram, pot_var_N1p, pot_var_ch = getNTuples(vsents, pot_var_vocab_list, "var")
+    print "N-GRAMS"
     act_var_ngram, act_var_N1p, act_var_ch = getNTuples(vsents, act_var_vocab_list, "var")
+    print "N-GRAMS"
     pickle.dump(((meth_ngram, meth_N1p, meth_ch), (pot_var_ngram, pot_var_N1p, pot_var_ch), (act_var_ngram, act_var_N1p, act_var_ch)), count_file)
+    count_file.close()
+    MEMM = linear_model.LogisticRegression()
+    if not mode == "cfs":
+        MEMM.fit(X,y)
+    pickle.dump(MEMM, memm_file)
     meth_file.close()
     var_file.close()
-    nvocab_file.close()
-    count_file.close()
+    memm_file.close()
         
 if __name__ == "__main__":
     main()

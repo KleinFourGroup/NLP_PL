@@ -17,6 +17,7 @@ class Tester {
 		m = 3;
 		x = 0f;
 		t1(m, n);
+		UNK();
 		v = t2();
 
 		{

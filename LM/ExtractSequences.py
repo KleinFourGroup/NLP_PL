@@ -127,6 +127,73 @@ def getVarSents(sents):
                     s.append('|')
                     s.extend(app)
                     sen.append((s, ctx))
-            if len(sen) > 0:
-                vsents.append(sen)
+            vsents.append(sen)
     return vsents
+
+def getVarSents2(sents):
+    vsents = []
+    for sent, v_list in sents:
+        for var in v_list:
+            sen = []
+            for stat, ctx in sent:
+                app = []
+                for i in range(len(stat)):
+                    if stat[i] == var[2]:
+                        app.append(i - 3)
+                if len(app) > 0:
+                    s = t.getSig(stat, v_list)
+                    f = s[0]
+                    n = len(s) - 1
+                    sen.append((f, n, tuple(app)))
+            vsents.append(sen)
+    return vsents
+
+def getFeatures(meth_sents):
+    sents = []
+    for s in meth_sents:
+        sent = []
+        for i in range(len(s)):
+            stat, inf = s[i]
+            if i > 0:
+                pre = sent[i-1]
+            else:
+                pre = None
+            if type(stat) is str:
+                sent.append((stat, [0 for i in range(8)]))
+            else:
+                feat = []
+                if "begin" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "end" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "For" in inf or "While" in inf or "DoWhile" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "IfThenElse" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "Switch" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "TryBlock" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "Catches" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                if "Finally" in inf:
+                    feat.append(1)
+                else:
+                    feat.append(0)
+                sent.append((stat, feat))
+        sents.append(sent)
+    return sents

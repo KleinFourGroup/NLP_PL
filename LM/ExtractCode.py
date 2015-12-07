@@ -404,11 +404,28 @@ class CodeUnit:
             else:
                 try:
                     if stat[0] == "call":
-                        if stat[1].split('.')[0] == "android":
+                        if stat[1] == "UNK":
+                            bod.append("UNK")
+                        elif stat[1].split('.')[0] == "android":
                             bod.append(stat)
                 except:
                     pass
         self.body = bod
+    def getUNKVL(self):
+        ret = None
+        for stat in self.body:
+            if type(stat) == type(self):
+                pot = stat.getUNKVL()
+                if pot is not None:
+                    ret = pot
+                    ret.extend(self.v_list)
+            else:
+                try:
+                    if stat == "UNK":
+                        ret = copy.deepcopy(self.v_list)
+                except:
+                    pass
+        return ret
     def getUNR(self):
         unr = []
         for stat in self.body:

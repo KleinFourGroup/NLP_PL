@@ -6,11 +6,12 @@ import ExtractCode as e
 
 def main():
     par = plyj.parser.Parser()
-    file_path = "../Java/Corpus/"
+    file_path = "../Java/ParseTests/"
     unr = []
     for subdir, dirs, files in os.walk(file_path):
         for f in files:
-            if f.endswith(".java"):
+            print f
+            if f.endswith("test.java"):
                 p = os.path.join(subdir, f)
                 cus = e.ExtractCode(par, p)
                 for i, cu in cus:
@@ -19,8 +20,8 @@ def main():
                     print cu.getStr()
                     for v in cu.dumpVars():
                         print e.nstr(v)
-                    break
-            break
+                    #break
+            #break
     for s in unr:
         print e.nstr(s)
         
