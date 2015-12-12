@@ -55,6 +55,7 @@ def getReducedLines(meth_file):
             sents.append(sent)
             sent = []
     return sents
+            
 
 def getVarLines(var_file):
     var_file.seek(0)

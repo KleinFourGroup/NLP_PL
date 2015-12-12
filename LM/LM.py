@@ -5,13 +5,19 @@ import random
 import ExtractSequences as seq
 import operator
 
+def genIndex(words2index, w):
+    if not w in words2index:
+        m = 0
+        return len(words2index)+100
+    return words2index[w]
+
 def ngramProb(ngram, words2index, ngrams, N1p, ch):
     if len(ngram) == 0:
         return 1.0 / (len(words2index) - 2)
     else:
-        pre = tuple([words2index[w] for w in ngram[:-1]])
-        nxt = tuple([words2index[w] for w in ngram[1:]])
-        cur = tuple([words2index[w] for w in ngram])
+        pre = tuple([genIndex(words2index, w) for w in ngram[:-1]])
+        nxt = tuple([genIndex(words2index, w) for w in ngram[1:]])
+        cur = tuple([genIndex(words2index, w) for w in ngram])
         #print ngram, pre, nxt, cur
         if cur in ngrams:
             mle = ngrams[cur] * 1.0/ ch[pre]
@@ -41,37 +47,13 @@ def seqProb(seq, dat, mode = "ngram"):
             #print ng, p
             LL += math.log(p)
     elif mode == "MEMM":
-        memm = dat
-        for stat in seq:
-            if type(stat) == tuple:
-                fcall, tags = stat
-                P = memm.predict_log_proba(tags)[0]
-                for i in range(len(memm.classes_)):
-                    if fcall == memm.classes_[i]:
-                        LL += P[i]
-    return LL
-
-def seqProb(seq, dat, mode = "ngram"):
-    LL = 0
-    if mode == "ngram":
-        n, words2index, ngrams, N1p, ch = dat
-        for i in range(2, len(seq)):
-            ng = [seq[j] for j in range(i - n+1, i + 1)]
-            for i in range(len(ng)):
-                if type(ng[i]) is not str:
-                    ng[i] = ng[i][0]
-            #print ng
-            p = ngramProb(ng, words2index, ngrams, N1p, ch)
-            #print ng, p
-            LL += math.log(p)
-    elif mode == "MEMM":
         memm, words2index = dat
         for stat in seq:
             if type(stat) == tuple:
                 fcall, tags = stat
                 P = memm.predict_log_proba(tags)[0]
                 for i in range(len(memm.classes_)):
-                    if words2index[fcall] == memm.classes_[i]:
+                    if genIndex(words2index, fcall) == memm.classes_[i]:
                         LL += P[i]
     return LL
 
@@ -136,7 +118,7 @@ def var_guesses(word, cu, meth_sigs, n):
         sigl[tuple(line)] = 0
     return sigl
 
-def getLL(cu, i, seq_mode = "levels", meth_prob = "MEMM", var_prob = 3, var_voc = "pot", fill = "max", num_guess = 20):
+def getLL(cu, i, seq_mode = "levels", meth_prob = "MEMM", var_prob = 3, var_voc = "pot", fill = "max", num_guess = 200):
     data_path = "../Data/Revised"
     vocab_name = "vocab_" + seq_mode + ".txt"
     counts_name = "counts_" + seq_mode + ".txt"
@@ -177,9 +159,9 @@ def getLL(cu, i, seq_mode = "levels", meth_prob = "MEMM", var_prob = 3, var_voc 
         memm_file.close()
     imp, fi, sents = seq.getSents(cu, i, seq_mode)
     word_ll = {}
+    noUnk = True
     for word in meth_vocab_list:
-        #print word
-        if type(word) is not str:
+        if type(word) is not str and word[0].split('$')[0] in i:
             ll = 0
             ctr = 0
             for sent, vl in sents:
@@ -187,6 +169,7 @@ def getLL(cu, i, seq_mode = "levels", meth_prob = "MEMM", var_prob = 3, var_voc 
                 for stat, ctx in sent:
                     if stat == "UNK":
                         newsent.append((word, ctx))
+                        noUnk = False
                     else:
                         f = stat[1]
                         n = len(stat) - 2
@@ -205,36 +188,55 @@ def getLL(cu, i, seq_mode = "levels", meth_prob = "MEMM", var_prob = 3, var_voc 
     word_ll = sorted(word_ll.items(), key=operator.itemgetter(1), reverse = True)
     top_guess = {}
     i = 0
-    while i < len(word_ll) and len(top_guess) < 20:
+    if noUnk:
+        ll = 0
+        vsents = seq.getVarSents2(sents)
+        var_dat = [var_prob, var_vocab_list]
+        var_dat.extend(var_count)
+        for sen in vsents:
+            sen.insert(0, "<S1>")
+            sen.insert(0, "<S2>")
+            sen.append("<END>")
+            ctr += len(sen) - 2
+            #print sen
+            ll += varSeqProb(sen, var_dat)
+        top_guess = [[["NILL"], ll / ctr]]
+    else:
         if fill == "max":
-            w = word_ll[i][0]
+            len_guess = 20
         else:
-            w = random.choice(word_ll)[0]
-        i += 1
-        var_guess = var_guesses(w, cu, meth_sigs, num_guess)
-        if len(var_guess) > 0:
-            var_dat = [var_prob, var_vocab_list]
-            var_dat.extend(var_count)
-            for call in var_guess:
-                ll = 0
-                ctr = 0
-                vsents = []
-                for sent, vl in sents:
-                    newsent = []
-                    for stat, ctx in sent:
-                        if stat == "UNK":
-                            newsent.append((call, ctx))
-                        else:
-                            newsent.append((stat, ctx))
-                    vsents.append([newsent, vl])
-                vsents = seq.getVarSents2(vsents)
-                for sen in vsents:
-                    sen.insert(0, "<S1>")
-                    sen.insert(0, "<S2>")
-                    sen.append("<END>")
-                    ctr += len(sen) - 2
-                    #print sen
-                    ll += varSeqProb(sen, var_dat)
-                top_guess[call] = ll / ctr
-    top_guess  = sorted(top_guess.items(), key=operator.itemgetter(1), reverse = True)
+            len_guess = 1
+            num_guess = 1
+        while i < len(word_ll) and len(top_guess) < len_guess:
+            if fill == "max":
+                w = word_ll[i][0]
+            else:
+                w = random.choice(word_ll)[0]
+            i += 1
+            var_guess = var_guesses(w, cu, meth_sigs, num_guess)
+            if len(var_guess) > 0:
+                var_dat = [var_prob, var_vocab_list]
+                var_dat.extend(var_count)
+                for call in var_guess:
+                    ll = 0
+                    ctr = 0
+                    vsents = []
+                    for sent, vl in sents:
+                        newsent = []
+                        for stat, ctx in sent:
+                            if stat == "UNK":
+                                newsent.append((call, ctx))
+                            else:
+                                newsent.append((stat, ctx))
+                        vsents.append([newsent, vl])
+                    vsents = seq.getVarSents2(vsents)
+                    for sen in vsents:
+                        sen.insert(0, "<S1>")
+                        sen.insert(0, "<S2>")
+                        sen.append("<END>")
+                        ctr += len(sen) - 2
+                        #print sen
+                        ll += varSeqProb(sen, var_dat)
+                    top_guess[call] = ll / ctr
+        top_guess  = sorted(top_guess.items(), key=operator.itemgetter(1), reverse = True)
     return top_guess

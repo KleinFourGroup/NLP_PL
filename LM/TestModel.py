@@ -15,12 +15,13 @@ def main():
     sm = [["levels", 3], ["levels", 2], ["levels", 1], ["levels", "MEMM"], ["cfs", 3], ["cfs", 2], ["cfs", 1]]
     vp = [3, 2, 1]
     fill = ["max", "random"]
+    fout = open("results.csv", 'w')
     for subdir, dirs, files in os.walk(corpus_path):
         for f in files:
             clear = True
             for h in blacklist:
                 if h in f: clear = False
-            if f.endswith(".java") and clear:
+            if clear:
                 p = os.path.join(subdir, f)
                 cus = e.ExtractCode(par, p)
                 for smod, mp in sm:
@@ -30,8 +31,14 @@ def main():
                                 cu = copy.deepcopy(cu)
                                 ans = LM.getLL(cu, i, smod, mp, v, "pot", fi)
                                 print smod, mp, v, "pot", fi
-                                for call, ll in ans:
+                                for call, ll in ans[:20]:
                                     print str(ll) + ': ' + e.nstr(call)
+                                if f.endswith(".java"):
+                                    unk = True
+                                else:
+                                    unk = False
+                                fout.write(f[:-5] + ';' + smod + ';' + str(mp) + ';' + str(v) + ';' + fi + ';' + str(unk) + ';' + str(ll) + '\n')
+    fout.close()
 #    print len(vocab)
 #    print len(set(sf))
 #    print len(set(fields))
